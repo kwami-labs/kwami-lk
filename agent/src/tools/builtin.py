@@ -1,7 +1,10 @@
 """Built-in function tools for KwamiAgent."""
 
-from typing import Any, Dict
+import json
+import os
+from typing import Any, Dict, List
 
+import httpx
 from livekit.agents import RunContext, function_tool
 
 from ..utils.logging import get_logger
@@ -247,3 +250,65 @@ class AgentToolsMixin:
                 "enabled": True,
                 "status": f"Error: {str(e)}",
             }
+
+    @function_tool()
+    async def web_search(self, context: RunContext, query: str, max_results: int = 5) -> str:
+        """Search the web for current information. Use when the user asks about recent events, facts, news, or anything you need to look up.
+
+        Args:
+            query: The search query.
+            max_results: Maximum number of results to return (1-10, default 5).
+        """
+        api_key = os.environ.get("TAVILY_API_KEY")
+        if not api_key:
+            logger.warning("TAVILY_API_KEY not set; web search disabled")
+            return "Web search is not configured (missing TAVILY_API_KEY)."
+
+        max_results = max(1, min(10, max_results))
+        payload = {
+            "api_key": api_key,
+            "query": query,
+            "search_depth": "basic",
+            "max_results": max_results,
+            "include_answer": True,
+        }
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                resp = await client.post(
+                    "https://api.tavily.com/search",
+                    json=payload,
+                )
+                resp.raise_for_status()
+                data = resp.json()
+        except Exception as e:
+            logger.exception("Tavily search failed")
+            return f"Search failed: {str(e)}"
+
+        results: List[Dict[str, Any]] = [
+            {"title": r.get("title", ""), "url": r.get("url", ""), "content": r.get("content", "")}
+            for r in data.get("results", [])
+        ]
+        answer = data.get("answer") or ""
+
+        if self.room:
+            try:
+                msg = {
+                    "type": "search_results",
+                    "query": query,
+                    "results": results,
+                    "answer": answer,
+                }
+                await self.room.local_participant.publish_data(
+                    json.dumps(msg).encode("utf-8"),
+                    reliable=True,
+                )
+            except Exception as e:
+                logger.warning("Failed to send search_results to client: %s", e)
+
+        if answer:
+            return answer
+        if results:
+            return "\n".join(
+                f"- {r['title']}: {r['content'][:150]}..." for r in results[:3]
+            )
+        return "No results found."
