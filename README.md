@@ -1,4 +1,4 @@
-# Kwami AI Agents
+# Kwami LK
 
 LiveKit Cloud agents for Kwami AI voice interactions.
 
