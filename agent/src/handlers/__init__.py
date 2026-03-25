@@ -6,6 +6,7 @@ from .config_handler import (
     update_voice,
     update_llm,
     update_soul,
+    update_tools,
     update_persona,
 )
 from .tool_handler import handle_tool_result
@@ -16,6 +17,7 @@ __all__ = [
     "update_voice",
     "update_llm",
     "update_soul",
+    "update_tools",
     "update_persona",
     "handle_tool_result",
 ]

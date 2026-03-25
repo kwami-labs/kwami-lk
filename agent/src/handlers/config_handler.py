@@ -98,6 +98,12 @@ async def handle_full_config(
         if message.get("kwamiName"):
             new_config.kwami_name = message["kwamiName"]
         
+        # Tools (client-side executable tools sent from the frontend)
+        tools_data = message.get("tools")
+        if tools_data and isinstance(tools_data, list):
+            new_config.tools = tools_data
+            logger.info(f"Loaded {len(tools_data)} client tools from config")
+
         # Soul (supports legacy "persona" key during migration)
         soul_data = message.get("soul") or message.get("persona", {})
         if soul_data.get("name"):
@@ -195,7 +201,9 @@ async def handle_config_update(
             await update_llm(session, state, current_agent, config_payload, vad, create_agent_fn)
         elif update_type in {"soul", "persona"}:
             await update_soul(session, current_agent, config_payload)
-            
+        elif update_type == "tools":
+            await update_tools(current_agent, config_payload)
+
     except Exception as e:
         log_error(logger, f"Error updating {update_type}", e)
 
@@ -488,6 +496,39 @@ async def update_soul(
         new_instructions = agent._build_system_prompt(memory_text)
         await agent.update_instructions(new_instructions)
         logger.info(f"Updated soul: {soul.name} - {(soul.personality or '')[:50]}...")
+
+
+async def update_tools(
+    agent: Any,
+    tools: Any,
+) -> None:
+    """Register or refresh client-side tool definitions on the running agent.
+
+    Called when the frontend sends a tools config_update (e.g. after connect
+    when syncConfigToBackend('tools', ...) fires). Re-registers all provided
+    tool definitions so the LLM can call them.
+
+    Args:
+        agent: The current KwamiAgent instance.
+        tools: List of tool definition dicts from the frontend.
+    """
+    if not isinstance(tools, list) or not tools:
+        logger.warning("update_tools: received empty or non-list tools payload, skipping")
+        return
+
+    try:
+        agent.kwami_config.tools = tools
+        # Re-register clears old definitions and registers fresh ones
+        agent.client_tools.registered_tools = []
+        agent.client_tools._tools = []
+        agent.client_tools.register_client_tools(tools)
+
+        # Rebuild the full tool list (built-in + freshly registered client tools)
+        combined = agent.client_tools.create_client_tools()
+        agent._tools = combined
+        logger.info(f"update_tools: registered {len(tools)} client tools on running agent")
+    except Exception as e:
+        log_error(logger, "update_tools: failed to register client tools", e)
 
 
 # Backward-compatible alias for any modules importing the old name.
