@@ -26,6 +26,7 @@ from .factories import create_llm, create_stt, create_tts, create_realtime_model
 from .handlers import handle_full_config, handle_config_update, handle_tool_result
 from .memory import create_memory
 from .room_context import set_current_room
+from .runtime_bootstrap import fetch_runtime_config, resolve_kwami_id
 from .session import SessionState, create_session_state
 from .utils.logging import get_logger
 
@@ -174,6 +175,19 @@ async def entrypoint(ctx: JobContext) -> None:
             audio_output=True,
         ),
     )
+
+    kwami_id = resolve_kwami_id(ctx)
+    if kwami_id:
+        logger.info("Resolved telephony kwami_id: %s", kwami_id)
+        runtime_config = await fetch_runtime_config(kwami_id)
+        if runtime_config:
+            await handle_full_config(
+                session,
+                state,
+                runtime_config,
+                vad,
+                create_agent_from_config,
+            )
     
     logger.info(f"Kwami session started for room: {ctx.room.name}")
 
