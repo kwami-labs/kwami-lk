@@ -16,6 +16,14 @@ API_BASE_URL = os.environ.get("KWAMI_API_URL", "http://localhost:8080")
 KWAMI_API_KEY = os.environ.get("KWAMI_API_KEY", "")
 
 
+def _api_timeout_seconds() -> float:
+    raw = os.environ.get("KWAMI_API_TIMEOUT", "30.0")
+    try:
+        return max(1.0, float(raw))
+    except ValueError:
+        return 30.0
+
+
 def _parse_json_dict(value: str | None) -> dict[str, Any]:
     if not value:
         return {}
@@ -50,8 +58,28 @@ async def fetch_runtime_config(kwami_id: str) -> dict[str, Any] | None:
         return None
 
     url = f"{API_BASE_URL.rstrip('/')}/internal/kwamis/{kwami_id}/runtime"
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        response = await client.get(url, headers={"X-Kwami-API-Key": KWAMI_API_KEY})
-        response.raise_for_status()
-        payload = response.json()
-        return payload if isinstance(payload, dict) else None
+    timeout = _api_timeout_seconds()
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.get(url, headers={"X-Kwami-API-Key": KWAMI_API_KEY})
+            response.raise_for_status()
+            payload = response.json()
+            return payload if isinstance(payload, dict) else None
+    except httpx.HTTPStatusError as exc:
+        body = (exc.response.text[:300] + "...") if exc.response and exc.response.text else ""
+        logger.warning(
+            "Kwami API returned %s for runtime config: %s",
+            exc.response.status_code if exc.response else "?",
+            body,
+        )
+        return None
+    except httpx.RequestError as exc:
+        logger.warning(
+            "Kwami API unreachable for runtime config (%s: %s). "
+            "KWAMI_API_URL=%r — if the agent runs in Docker/Kubernetes, localhost is the container, not your laptop; "
+            "use the host LAN IP, host.docker.internal, or a public/tunnel URL.",
+            type(exc).__name__,
+            exc,
+            API_BASE_URL,
+        )
+        return None
