@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from livekit.agents import RunContext, function_tool
 
+from ..room_context import get_current_room
 from ..utils.logging import get_logger
 from ..utils.validation import validate_tool_definition
 
@@ -98,9 +99,21 @@ class ClientToolManager:
                 f"Calling client tool '{tool_name}' (id: {tool_call_id}) args: {raw_arguments}"
             )
 
+            room = (
+                get_current_room()
+                or (getattr(context, "room", None) if context else None)
+                or getattr(self.agent, "room", None)
+            )
+
             # Check room connection
-            if not hasattr(self.agent, "room") or not self.agent.room:
-                logger.error("Cannot call client tool: No room connection")
+            if not room:
+                logger.error(
+                    "Cannot call client tool: No room connection "
+                    "(current_room=%s, context_room=%s, agent_room=%s)",
+                    get_current_room() is not None,
+                    getattr(context, "room", None) is not None if context else False,
+                    getattr(self.agent, "room", None) is not None,
+                )
                 return "Error: Agent not connected to room"
 
             result_future: asyncio.Future = asyncio.Future()
@@ -117,7 +130,7 @@ class ClientToolManager:
 
             try:
                 data = json.dumps(payload).encode("utf-8")
-                await self.agent.room.local_participant.publish_data(data, reliable=True)
+                await room.local_participant.publish_data(data, reliable=True)
 
                 try:
                     result = await asyncio.wait_for(result_future, timeout=30.0)
