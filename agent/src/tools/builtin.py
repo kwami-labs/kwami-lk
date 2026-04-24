@@ -845,6 +845,21 @@ class AgentToolsMixin:
             return f"Failed to scroll: {e}"
 
     @function_tool()
+    async def run_js_in_navigation(self, context: RunContext, expression: str) -> str:
+        """Run arbitrary JavaScript in the browser context. Useful for complex shadow DOMs or finding specific elements that simple reading misses.
+
+        Args:
+            expression: The JavaScript code to execute.
+        """
+        session = await self._get_browser_session()
+        if not session.is_active:
+            return "No browser is open. Use navigate_to first."
+        try:
+            return await session.evaluate_js(expression)
+        except Exception as e:
+            return f"Failed to run JS: {e}"
+
+    @function_tool()
     async def read_navigation_page(self, context: RunContext) -> str:
         """Read the content of the page currently open in the browser.
         Returns the page title, main text, and a list of interactive elements with ids (el-0, el-1, ...)

@@ -186,16 +186,21 @@ class KwamiAgent(Agent, AgentToolsMixin):
         # Navigation guidance
         prompt_parts.append(
             "\nYou can browse the web for the user. Use navigate_to to open a website. "
-            "The page opens in a live browser panel embedded in the app — the user sees "
-            "everything you do in real time and can interact with the browser directly. "
-            "Use read_navigation_page to see page content and interactive elements, then "
+            "The page opens in a live browser panel embedded in the app. The user sees "
+            "everything you do in real time. Use read_navigation_page to see page content and interactive elements, then "
             "click_in_navigation to click elements (prefer element_id like 'el-5'), "
             "type_in_navigation to type text, press_key_in_navigation for keys like Enter, "
-            "and scroll_navigation to scroll. The user's login state persists across sessions "
-            "(cookies are saved). If you navigate to a site where the user needs to log in, "
-            "tell them they can log in directly in the browser panel and their session will be "
-            "saved for next time. Describe what you see and what you're doing so the user can "
-            "follow along. Use close_navigation when done."
+            "and scroll_navigation to scroll. Describe what you see and what you're doing so the user can follow along."
+        )
+        prompt_parts.append(
+            "ADVANCED NAVIGATION STRATEGIES:\n"
+            "1. DIRECT SEARCHING: If the user asks you to search for something on a major site (YouTube, Google, Amazon, etc.), "
+            "DO NOT try to navigate to the homepage and click the search bar. Instead, navigate DIRECTLY to the search URL. "
+            "Example: for YouTube, use navigate_to('https://www.youtube.com/results?search_query=song+name').\n"
+            "2. COMPLEX DOMs: Modern sites (like YouTube) hide elements inside Shadow DOMs that read_navigation_page cannot see. "
+            "If you cannot find the element you need to click, use the run_js_in_navigation tool to execute JavaScript directly "
+            "to find and click the element (e.g., `document.querySelector('ytd-video-renderer a#video-title').click()`).\n"
+            "Use close_navigation when done."
         )
 
         # Memory context injection

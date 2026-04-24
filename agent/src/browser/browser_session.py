@@ -107,8 +107,15 @@ class CloudBrowserSession:
         # Enable Page domain for navigation events
         try:
             await self._cdp.send("Page.enable")
-        except Exception:
-            pass
+            await self._cdp.send(
+                "Emulation.setDeviceMetricsOverride",
+                width=1280,
+                height=1400,
+                deviceScaleFactor=1,
+                mobile=False,
+            )
+        except Exception as e:
+            logger.debug("Failed to set CDP initial overrides: %s", e)
 
         # Navigate to initial URL if provided
         if url:
@@ -321,6 +328,16 @@ class CloudBrowserSession:
         delta = 400 if direction.lower() == "down" else -400
         await self._cdp.scroll(x=400, y=300, delta_y=delta)
         return f"Scrolled {direction}."
+
+    async def evaluate_js(self, expression: str) -> str:
+        """Evaluate arbitrary JavaScript in the page context."""
+        self._ensure_active()
+        self._reset_idle_timer()
+        try:
+            result = await self._cdp.evaluate(expression)
+            return f"JavaScript executed successfully. Result: {result}"
+        except Exception as e:
+            return f"Failed to execute JavaScript: {e}"
 
     # -- Internal helpers ----------------------------------------------------
 
