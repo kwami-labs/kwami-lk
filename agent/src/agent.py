@@ -142,7 +142,26 @@ class KwamiAgent(Agent, AgentToolsMixin):
                 "creativity": ("more literal", "more creative"),
                 "patience": ("more brisk", "more patient"),
             }
-            directives = []
+            trait_weights = {
+                "happiness": 1.1,
+                "energy": 1.0,
+                "confidence": 1.2,
+                "calmness": 1.25,
+                "optimism": 1.05,
+                "socialness": 0.9,
+                "empathy": 1.35,
+                "curiosity": 0.95,
+                "creativity": 0.9,
+                "patience": 1.15,
+            }
+            if isinstance(getattr(soul, "emotional_trait_weights", None), dict):
+                for key, value in soul.emotional_trait_weights.items():
+                    if key in trait_weights:
+                        try:
+                            trait_weights[key] = max(0.5, min(1.5, float(value)))
+                        except (TypeError, ValueError):
+                            continue
+            weighted_traits = []
             for key, value in soul.emotional_traits.items():
                 if key not in trait_labels:
                     continue
@@ -150,17 +169,28 @@ class KwamiAgent(Agent, AgentToolsMixin):
                     score = float(value)
                 except (TypeError, ValueError):
                     continue
-                if abs(score) < 20:
+                weighted_score = score * trait_weights.get(key, 1.0)
+                magnitude = min(100.0, abs(weighted_score))
+                if magnitude < 10:
                     continue
                 low_label, high_label = trait_labels[key]
-                direction = high_label if score > 0 else low_label
-                strength = "slightly" if abs(score) < 50 else "noticeably"
-                directives.append(f"{strength} {direction}")
+                direction = high_label if weighted_score > 0 else low_label
+                if magnitude < 35:
+                    strength = "slightly"
+                elif magnitude < 60:
+                    strength = "moderately"
+                elif magnitude < 85:
+                    strength = "strongly"
+                else:
+                    strength = "very strongly"
+                weighted_traits.append((magnitude, f"{strength} {direction}"))
 
-            if directives:
+            if weighted_traits:
+                weighted_traits.sort(key=lambda item: item[0], reverse=True)
+                directives = [directive for _, directive in weighted_traits[:5]]
                 prompt_parts.append(
                     "\nVoice emotion profile: "
-                    + ", ".join(directives[:4])
+                    + ", ".join(directives)
                     + ". Keep this consistent without sounding exaggerated."
                 )
 
